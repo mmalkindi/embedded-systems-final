@@ -1,13 +1,17 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
-// ================= STRUCT DATA =================
-typedef struct struct_message {
+// ================= STRUKTUR DATA (HARUS SAMA DENGAN SENDER) =================
+typedef struct {
   long distanceCM;
+  int percentage;
 } struct_message;
 
 struct_message receivedData;
+
+// ================= VARIABEL GLOBAL =================
 volatile long receivedDistance = -1;
+volatile int receivedPercent = 0;
 
 // ================= PROTOTYPE TASK =================
 void displayTask(void *pvParameters);
@@ -20,6 +24,7 @@ void OnDataRecv(const esp_now_recv_info *info,
   if (len == sizeof(struct_message)) {
     memcpy(&receivedData, incomingData, sizeof(receivedData));
     receivedDistance = receivedData.distanceCM;
+    receivedPercent  = receivedData.percentage;
   }
 }
 
@@ -39,9 +44,10 @@ void setup() {
 
   esp_now_register_recv_cb(OnDataRecv);
 
+  // ================= TASK DISPLAY =================
   xTaskCreatePinnedToCore(
     displayTask,
-    "Display",
+    "DisplayTask",
     2048,
     NULL,
     1,
@@ -51,7 +57,7 @@ void setup() {
 }
 
 void loop() {
-  // kosong
+  // kosong (FreeRTOS yang bekerja)
 }
 
 // ================= TASK DISPLAY =================
@@ -59,9 +65,11 @@ void displayTask(void *pvParameters) {
   (void) pvParameters;
 
   for (;;) {
-    Serial.print("Distance received: ");
-    Serial.print(receivedDistance);
-    Serial.println(" cm");
+    Serial.print("Water Height Level received: ");
+    Serial.print(11 - receivedDistance);
+    Serial.print(" cm | Level: ");
+    Serial.print(receivedPercent);
+    Serial.println(" %");
 
     vTaskDelay(pdMS_TO_TICKS(200));
   }

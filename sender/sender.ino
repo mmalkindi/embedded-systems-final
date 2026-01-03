@@ -2,16 +2,15 @@
 #include <WiFi.h>
 
 // ================= MAC RECEIVER =================
-uint8_t receiverMac[] = {0x88, 0x57, 0x21, 0x94, 0x69, 0x10};
+uint8_t receiverMac[] = {0x88, 0x57, 0x21, 0x94, 0x69, 0x70};
 
 // ================= STRUKTUR DATA =================
 typedef struct {
   long distanceCM;
-  int percentage;   // persentase terhadap BATAS AMAN
-} struct_message;
+  int percentage;
+} water_message;
 
-struct_message myData;
-esp_now_peer_info_t peerInfo;
+water_message myData;
 
 // ================= PIN =================
 #define TRIG_PIN    14
@@ -20,8 +19,8 @@ esp_now_peer_info_t peerInfo;
 #define BUZZER_PIN  26
 
 // ================= PARAMETER TABUNG =================
-#define TANK_HEIGHT_CM 12   // tinggi fisik tabung
-#define SAFE_HEIGHT_CM 8    // batas aman pengisian
+#define TANK_HEIGHT_CM 11
+#define SAFE_HEIGHT_CM 8
 
 // ================= VARIABEL =================
 volatile long distanceCM = -1;
@@ -52,6 +51,7 @@ void setup() {
 
   esp_now_register_send_cb(OnDataSent);
 
+  esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, receiverMac, 6);
   peerInfo.channel = 0;
   peerInfo.encrypt = false;
@@ -74,7 +74,6 @@ void setup() {
 }
 
 void loop() {
-  // kosong (FreeRTOS yang jalan)
 }
 
 // ================= TASK BACA ULTRASONIC =================
@@ -82,7 +81,6 @@ void readUltrasonicTask(void *pvParameters) {
   (void) pvParameters;
 
   for (;;) {
-    // Trigger ultrasonic
     digitalWrite(TRIG_PIN, LOW);
     delayMicroseconds(2);
     digitalWrite(TRIG_PIN, HIGH);
@@ -97,21 +95,17 @@ void readUltrasonicTask(void *pvParameters) {
       distanceCM = duration / 58;
     }
 
-    // ================= HITUNG KETINGGIAN AIR =================
     if (distanceCM >= 0 && distanceCM <= TANK_HEIGHT_CM) {
       long waterHeight = TANK_HEIGHT_CM - distanceCM;
-
-      // Persentase terhadap BATAS AMAN
       waterPercent = (waterHeight * 100) / SAFE_HEIGHT_CM;
     } else {
       waterPercent = 0;
     }
 
-    // ================= LOGIKA LED & BUZZER =================
-    // LED ON jika air < 20% batas aman
-    digitalWrite(LED_PIN, waterPercent < 20 ? HIGH : LOW);
+    if (waterPercent < 0) waterPercent = 0;
+    if (waterPercent > 100) waterPercent = 100;
 
-    // BUZZER ON jika melewati batas aman
+    digitalWrite(LED_PIN, waterPercent < 20 ? HIGH : LOW);
     digitalWrite(BUZZER_PIN, waterPercent >= 100 ? HIGH : LOW);
 
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -128,12 +122,12 @@ void sendEspNowTask(void *pvParameters) {
 
     esp_now_send(receiverMac, (uint8_t *)&myData, sizeof(myData));
 
-    Serial.print("Distance: ");
-    Serial.print(distanceCM);
+    Serial.print("Water Height Level: ");
+    Serial.print(abs(11 - distanceCM));
     Serial.print(" cm | Level: ");
     Serial.print(waterPercent);
     Serial.println(" %");
 
-    vTaskDelay(pdMS_TO_TICKS(300));
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
